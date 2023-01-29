@@ -77,6 +77,11 @@ def get_closure_phase_bias_parser(subparsers=None):
     parser.set_defaults(func=closure_phase_bias.main)
     return parser
 
+def get_convert_geom_gmt_parser(subparsers=None):
+    from mintpy.cli import convert_geom_gmt
+    parser = convert_geom_gmt.create_parser(subparsers)
+    parser.set_defaults(func=convert_geom_gmt.main)
+    return parser
 
 def get_dem_error_parser(subparsers=None):
     from mintpy.cli import dem_error
@@ -580,6 +585,7 @@ def get_parser():
     get_prep_snap_parser(sp)
 
     # I/O
+    get_convert_geom_gmt_parser(sp)
     get_load_data_parser(sp)
     get_load_gbis_parser(sp)
     get_remove_hdf5_dset(sp)
