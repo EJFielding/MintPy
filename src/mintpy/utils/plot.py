@@ -1,10 +1,11 @@
+"""Utilities for plotting."""
 ############################################################
 # Program is part of MintPy                                #
 # Copyright (c) 2013, Zhang Yunjun, Heresh Fattahi         #
 # Author: Zhang Yunjun, 2018                               #
 ############################################################
 # Recommend import:
-#     from mintpy.utils import plot as pp
+#   from mintpy.utils import plot as pp
 
 
 import datetime as dt
@@ -1408,6 +1409,8 @@ def plot_colorbar(inps, im, cax):
         else:
             cbar.locator = ticker.MaxNLocator(nbins=inps.cbar_nbins)
             cbar.update_ticks()
+    elif inps.cbar_ticks:
+        cbar.set_ticks(inps.cbar_ticks)
 
     cbar.ax.tick_params(which='both', direction='out', labelsize=inps.font_size, colors=inps.font_color)
 
@@ -1418,6 +1421,44 @@ def plot_colorbar(inps, im, cax):
         cbar.set_label(inps.disp_unit,  fontsize=inps.font_size, color=inps.font_color)
 
     return inps, cbar
+
+
+def plot_faultline(ax, faultline_file, SNWE, linewidth=0.5, print_msg=True):
+    """Plot fault lines.
+
+    Parameters: ax             - matplotlib.axes object
+                faultline_file - str, path to the fault line file in GMT lonlat format
+                SNWE           - tuple of 4 float, for south, north, west and east
+    Returns:    ax             - matplotlib.axes object
+                faults         - list of 2D np.ndarray in size of [num_point, 2] in float32
+                                 with each row for one point in [lon, lat] in degrees
+    """
+
+    if print_msg:
+        print(f'plot fault lines from GMT lonlat file: {faultline_file}')
+
+    # read faults
+    faults = readfile.read_gmt_lonlat_file(
+        faultline_file,
+        SNWE=SNWE,
+        min_dist=0.1,
+        print_msg=print_msg,
+    )
+
+    # plot
+    print_msg = False if len(faults) < 1000 else print_msg
+    prog_bar = ptime.progressBar(maxValue=len(faults), print_msg=print_msg)
+    for i, fault in enumerate(faults):
+        ax.plot(fault[:,0], fault[:,1], 'k-', lw=linewidth)
+        prog_bar.update(i+1, every=10)
+    prog_bar.close()
+
+    # keep the same axis limit
+    S, N, W, E = SNWE
+    ax.set_xlim(W, E)
+    ax.set_ylim(S, N)
+
+    return ax, faults
 
 
 def add_arrow(line, position=None, direction='right', size=15, color=None):

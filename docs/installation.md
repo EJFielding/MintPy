@@ -2,13 +2,20 @@
 
 <p>
 <details open>
-<p><summary>via conda</summary></p>
+<p><summary>via conda / mamba</summary></p>
 
 MintPy is available on the <a href="https://anaconda.org/conda-forge/mintpy">conda-forge</a> channel. The latest released version can be installed via <code>conda</code> as:
 
 ```bash
 conda install -c conda-forge mintpy
 ```
+
+or via <code>mamba</code> as:
+
+```bash
+mamba install -c conda-forge mintpy
+```
+
 </details>
 
 <details>
@@ -82,13 +89,13 @@ conda install -c conda-forge --file ~/tools/MintPy/requirements.txt
 
 <p>
 <details>
-<p><summary>Or install the dependencies to a new environment named "mintpy" by running:</summary></p>
+<p><summary>Or install the dependencies to a new environment, e.g. named "mintpy", by running:</summary></p>
 
 ```bash
-conda env create -f ~/tools/MintPy/docs/environment.yml
+# Add "gdal'>=3'" below to install extra dependencies if you use ARIA, FRInGE, HyP3 or GMTSAR
+# Add "isce2"     below to install extra dependencies if you use ISCE-2
+conda create --name mintpy --file ~/tools/MintPy/requirements.txt
 conda activate mintpy
-
-# run "mamba install isce2" if you use ISCE-2
 ```
 </details>
 </p>
@@ -108,7 +115,7 @@ python -m pip install -e ~/tools/MintPy
 <details>
 <p><summary>via path setup</summary></p>
 
-Add below in your source file, e.g. <code>~/.bash_profile</code> for <em>bash</em> users or <code>~/.cshrc</code> for <em>csh/tcsh</em> users:
+Add below in your source file, e.g. <code>\~/.bash_profile</code> for <em>bash</em> users or <code>\~/.cshrc</code> for <em>csh/tcsh</em> users:
 
 ```bash
 if [ -z ${PYTHONPATH+x} ]; then export PYTHONPATH=""; fi

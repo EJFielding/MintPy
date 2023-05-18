@@ -97,7 +97,7 @@ def read_init_info(inps):
 
         # read error file
         error_fc = np.loadtxt(inps.error_file, dtype=bytes).astype(str)
-        inps.error_ts = error_fc[:, 1].astype(np.float)*inps.unit_fac
+        inps.error_ts = error_fc[:, 1].astype(np.float32)*inps.unit_fac
 
         # update error file with exlcude date
         if inps.ex_date_list:
@@ -616,17 +616,17 @@ def save_ts_data_and_plot(yx, d_ts, m_strs, inps):
 
     # write
     np.savetxt(outName, data, fmt='%s', delimiter='\t', header=header)
-    vprint('save displacement time-series to file: '+outName)
+    print('save displacement time-series to file: '+outName)
 
     # Figure - point time-series
     outName = f'{inps.outfile_base}_ts.pdf'
     inps.fig_pts.savefig(outName, bbox_inches='tight', transparent=True, dpi=inps.fig_dpi)
-    vprint('save time-series plot to file: '+outName)
+    print('save time-series plot to file: '+outName)
 
     # Figure - map
     outName = f'{inps.outfile_base}_{inps.date_list[inps.idx]}.png'
     inps.fig_img.savefig(outName, bbox_inches='tight', transparent=True, dpi=inps.fig_dpi)
-    vprint('save map plot to file: '+outName)
+    print('save map plot to file: '+outName)
     return
 
 
@@ -634,20 +634,17 @@ class timeseriesViewer():
     """Class for tsview.py
 
     Example:
-        cmd = 'tsview.py timeseries_ERA5_ramp_demErr.h5'
-        obj = timeseriesViewer(cmd)
-        obj.configure()
+        from mintpy.cli.tsview import cmd_line_parse
+        from mintpy.tsview import timeseriesViewer
+
+        cmd = 'timeseries.h5 --yx 273 271 --figsize 8 4'
+        inps = cmd_line_parse(cmd.split())
+        obj = timeseriesViewer(inps)
+        obj.open()
         obj.plot()
     """
 
-    def __init__(self, cmd=None, iargs=None):
-        if cmd:
-            iargs = cmd.split()[1:]
-        self.cmd = cmd
-        self.iargs = iargs
-        # print command line
-        if iargs is not None:
-            print(f'{os.path.basename(__file__)} ' + ' '.join(iargs))
+    def __init__(self, inps):
 
         # figure variables
         self.figname_img = 'Cumulative Displacement Map'
@@ -665,19 +662,23 @@ class timeseriesViewer():
         self.fig_pts = None
         self.ax_pts = None
 
-    def configure(self, inps):
-        global vprint
-        vprint = print if inps.print_msg else lambda *args, **kwargs: None
-
-        # matplotlib backend setting
-        if not inps.disp_fig:
-            plt.switch_backend('Agg')
-
-        inps, self.atr = read_init_info(inps)
-
         # copy inps to self object
         for key, value in inps.__dict__.items():
             setattr(self, key, value)
+
+    def open(self):
+        global vprint
+        vprint = print if self.print_msg else lambda *args, **kwargs: None
+
+        # print command line
+        if self.argv is not None:
+            print(f'{os.path.basename(__file__)} ' + ' '.join(self.argv))
+
+        # matplotlib backend setting
+        if not self.disp_fig:
+            plt.switch_backend('Agg')
+
+        self, self.atr = read_init_info(self)
 
         # input figsize for the point time-series plot
         self.figsize_pts = self.fig_size

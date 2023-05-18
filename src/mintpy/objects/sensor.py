@@ -1,3 +1,4 @@
+"""Utilities for SAR sensor parameters."""
 ############################################################
 # Program is part of MintPy                                #
 # Copyright (c) 2013, Zhang Yunjun, Heresh Fattahi         #
@@ -235,6 +236,18 @@ KSAT5 = {
     'ground_range_pixel_size'    : 2.7,       # m
 }
 
+# ICEYE SAR constellation
+# from Table 2.1 in ICEYE SAR Product Guide at:
+# https://earth.esa.int/eogateway/documents/20142/37627/ICEYE-SAR-Product-Guide-V4.pdf
+ICEYE = {
+    'carrier_frequency'          : 9.65e9,          # Hz
+    'altitude'                   : 570e3,           # m
+    'antenna_length'             : 3.2,             # m
+    'antenna_width'              : 0.4,             # m
+    'pulse_repetition_frequency' : [2e3, 10e3],     # Hz
+    'chirp_bandwidth'            : [37.6e6, 299e6], # Hz
+}
+
 
 ##--------------------  C-band  --------------------##
 
@@ -325,6 +338,7 @@ SEASAT = {
     'carrier_frequency'          : 1.275e9,   # Hz
     'altitude'                   : 787e3,     # m, mean value
     'antenna_length'             : 10.74,     # m
+    'antenna_width'              : 2.16,      # m
     'pulse_repetition_frequency' : 1555,      # Hz, 1463-1647
     'chirp_bandwidth'            : 19e6,      # Hz
 }
@@ -362,11 +376,21 @@ ALOS = {
 }
 
 # ALOS-2 PALSAR-2 stripmap ultra-fine single polarization mode
-# from Table 3 in Jung et al. (2014)
+# from Table 3 in Jung et al. (2014) and eoPortal Table 10-11.
+# eoPortal: https://www.eoportal.org/satellite-missions/alos-2
+#   Parameter       Spotlight               Stripmap            ScanSAR
+#                               ultrafine / high-     / fine
+#                                           sensitive
+#   Bandwidth (MHz)     84          84          42      28      14
+#   Ground reso (m)     3 x 1       3           6       10      100
+#   Swath (km)          25 x 25     50          50      70      350
+#                                            (FP:30)  (FP:30) (5 looks)
+# Notes: FP for full polarization
 ALOS2 = {
-    'carrier_frequency'          : 1.258e9,   # Hz
+    'carrier_frequency'          : 1.2575e9,  # Hz
     'altitude'                   : 628e3,     # m, mean value
     'antenna_length'             : 9.9,       # m
+    'antenna_width'              : 2.9,       # m
     'doppler_bandwidth'          : 1515,      # Hz
     'pulse_repetition_frequency' : 2000,      # Hz
     'chirp_bandwidth'            : 84.0e6,    # Hz
@@ -412,6 +436,7 @@ SENSOR_DICT = {
     'tsx'   : TSX,
     'csk'   : CSK,
     'ksat5' : KSAT5,
+    'iceye' : ICEYE,
     # C-band
     'ers'   : ERS,
     'env'   : ENV,

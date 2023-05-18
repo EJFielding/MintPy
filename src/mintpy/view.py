@@ -162,7 +162,9 @@ def update_inps_with_file_metadata(inps, metadata):
 
     # Figure output file name
     if not inps.outfile:
-        inps.outfile = [f'{inps.fig_title}{inps.fig_ext}']
+        # ignore whitespaces in the filename
+        fbase = inps.fig_title.replace(' ', '')
+        inps.outfile = [f'{fbase}{inps.fig_ext}']
 
     inps = update_figure_setting(inps)
     return inps
@@ -474,6 +476,10 @@ def plot_slice(ax, data, metadata, inps):
             and inps.fig_coord == 'geo'):
         vprint('plot in geo-coordinate')
 
+        # extent info for matplotlib.imshow and other functions
+        extent = (inps.geo_box[0], inps.geo_box[2], inps.geo_box[3], inps.geo_box[1])  # (W, E, S, N)
+        SNWE = (inps.geo_box[3], inps.geo_box[1], inps.geo_box[0], inps.geo_box[2])
+
         # Draw coastline using cartopy resolution parameters
         if inps.coastline:
             vprint(f'draw coast line with resolution: {inps.coastline}')
@@ -504,12 +510,19 @@ def plot_slice(ax, data, metadata, inps):
             # do not show the original InSAR reference point
             inps.disp_ref_pixel = False
 
-        extent = (inps.geo_box[0], inps.geo_box[2],
-                  inps.geo_box[3], inps.geo_box[1])  # (W, E, S, N)
-
         im = ax.imshow(data, cmap=inps.colormap, vmin=inps.vlim[0], vmax=inps.vlim[1],
                        extent=extent, origin='upper', interpolation='nearest',
                        alpha=inps.transparency, animated=inps.animation, zorder=1)
+
+        # Draw faultline using GMT lonlat file
+        if inps.faultline_file:
+            pp.plot_faultline(
+                ax=ax,
+                faultline_file=inps.faultline_file,
+                SNWE=SNWE,
+                linewidth=inps.faultline_linewidth,
+                print_msg=inps.print_msg,
+            )
 
         # Scale Bar
         if inps.coord_unit.startswith('deg') and (inps.geo_box[2] - inps.geo_box[0]) > 30:
@@ -519,7 +532,7 @@ def plot_slice(ax, data, metadata, inps):
         if inps.disp_scalebar:
             vprint(f'plot scale bar: {inps.scalebar}')
             pp.draw_scalebar(
-                ax,
+                ax=ax,
                 geo_box=inps.geo_box,
                 unit=inps.coord_unit,
                 loc=inps.scalebar,
@@ -530,7 +543,7 @@ def plot_slice(ax, data, metadata, inps):
         # Lat Lon labels
         if inps.lalo_label:
             pp.draw_lalo_label(
-                ax,
+                ax=ax,
                 geo_box=inps.geo_box,
                 lalo_step=inps.lalo_step,
                 lalo_loc=inps.lalo_loc,
@@ -1013,82 +1026,71 @@ def update_figure_setting(inps):
 
 def read_data4figure(i_start, i_end, inps, metadata):
     """Read multiple datasets for one figure into 3D matrix based on i_start/end"""
-    data = np.zeros((i_end - i_start,
-                     int((inps.pix_box[3] - inps.pix_box[1]) / inps.multilook_num),
-                     int((inps.pix_box[2] - inps.pix_box[0]) / inps.multilook_num),
-                    ), dtype=np.float32)
+
+    # initiate output matrix
+    data = np.zeros((
+        i_end - i_start,
+        int((inps.pix_box[3] - inps.pix_box[1]) / inps.multilook_num),
+        int((inps.pix_box[2] - inps.pix_box[0]) / inps.multilook_num),
+    ), dtype=np.float32)
+
+    # common args for readfile.read()
+    kwargs = dict(
+        box=inps.pix_box,
+        xstep=inps.multilook_num,
+        ystep=inps.multilook_num,
+        print_msg=inps.print_msg,
+    )
+
+    # reference pixel info for unwrapPhase
+    if inps.file_ref_yx:
+        ref_y, ref_x = inps.file_ref_yx
+        ref_kwargs = dict(box=(ref_x, ref_y, ref_x+1, ref_y+1), print_msg=False)
 
     # fast reading for single dataset type
     if (len(inps.dsetFamilyList) == 1
-            and inps.key in ['timeseries', 'giantTimeseries', 'ifgramStack', 'HDFEOS', 'geometry']):
+            and inps.key in ['timeseries', 'ifgramStack', 'geometry', 'HDFEOS', 'giantTimeseries']):
 
         vprint('reading data as a 3D matrix ...')
         dset_list = [inps.dset[i] for i in range(i_start, i_end)]
-        kwargs = dict(
-            datasetName=dset_list,
-            box=inps.pix_box,
-            xstep=inps.multilook_num,
-            ystep=inps.multilook_num,
-            print_msg=inps.print_msg)
-
         if not metadata.get('DATA_TYPE', 'float32').startswith('complex'):
-            data[:] = readfile.read(inps.file, **kwargs)[0]
+            data[:] = readfile.read(inps.file, datasetName=dset_list, **kwargs)[0]
         else:
-            # calculate amplitude time series in dB
+            # calculate amplitude time series in dB, e.g. slcStack.h5
             vprint('input data is complex, calculate its amplitude and continue')
-            data[:] = np.abs(readfile.read(inps.file, **kwargs)[0])
+            data[:] = np.abs(readfile.read(inps.file, datasetName=dset_list, **kwargs)[0])
 
-        if inps.key == 'ifgramStack':
-            # reference pixel info in unwrapPhase
-            if inps.dsetFamilyList[0].startswith('unwrapPhase') and inps.file_ref_yx:
-                # get reference value
-                ref_y, ref_x = inps.file_ref_yx
-                ref_box = (ref_x, ref_y, ref_x+1, ref_y+1)
-                ref_data = readfile.read(
-                    inps.file,
-                    datasetName=dset_list,
-                    box=ref_box,
-                    print_msg=False)[0]
-
-                # apply referencing
-                for i in range(data.shape[0]):
-                    mask = data[i, :, :] != 0.
-                    data[i, mask] -= ref_data[i]
+        # reference pixel info for unwrapPhase
+        if inps.dsetFamilyList[0].startswith('unwrapPhase') and inps.file_ref_yx:
+            ref_data = readfile.read(inps.file, datasetName=dset_list, **ref_kwargs)[0]
+            for i in range(data.shape[0]):
+                mask = data[i, :, :] != 0.
+                data[i, mask] -= ref_data[i]
 
     # slow reading with one 2D matrix at a time
     else:
         vprint('reading data as a list of 2D matrices ...')
+        kwargs['print_msg'] = False
         prog_bar = ptime.progressBar(maxValue=i_end-i_start, print_msg=inps.print_msg)
         for i in range(i_start, i_end):
-            d = readfile.read(
-                inps.file,
-                datasetName=inps.dset[i],
-                box=inps.pix_box,
-                xstep=inps.multilook_num,
-                ystep=inps.multilook_num,
-                print_msg=False)[0]
+            prog_bar.update(i - i_start + 1, suffix=inps.dset[i].split('/')[-1])
 
-            # reference pixel info in unwrapPhase
+            # read 2D matrix
+            d = readfile.read(inps.file, datasetName=inps.dset[i], **kwargs)[0]
+
+            # reference pixel info for unwrapPhase
             if inps.dset[i].startswith('unwrapPhase') and inps.file_ref_yx:
-                ref_y, ref_x = inps.file_ref_yx
-                d[d!=0] -= d[ref_y, ref_x]
+                ref_d = readfile.read(inps.file, datasetName=inps.dset[i], **ref_kwargs)[0]
+                d[d!=0] -= ref_d
 
             # save the matrix
             data[i - i_start, :, :] = d
-
-            prog_bar.update(i - i_start + 1, suffix=inps.dset[i].split('/')[-1])
         prog_bar.close()
 
     # ref_date for timeseries
     if inps.ref_date:
         vprint('consider input reference date: '+inps.ref_date)
-        ref_data = readfile.read(
-            inps.file,
-            datasetName=inps.ref_date,
-            box=inps.pix_box,
-            xstep=inps.multilook_num,
-            ystep=inps.multilook_num,
-            print_msg=False)[0]
+        ref_data = readfile.read(inps.file, datasetName=inps.ref_date, **kwargs)[0]
         data -= ref_data
 
     # check if all subplots share the same data unit, they could have/be:
@@ -1111,7 +1113,9 @@ def read_data4figure(i_start, i_end, inps, metadata):
         data, inps = update_data_with_plot_inps(data, metadata, inps)
     else:
         if any(x in inps.argv for x in ['-u', '--unit']):
-            print('WARNING: -u/--unit option is disabled for multi-subplots with different units! Ignore it and continue')
+            msg = 'WARNING: -u/--unit option is disabled for multi-subplots with different units!'
+            msg += 'Ignore it and continue.'
+            print(msg)
         inps.disp_unit = None
 
     # mask
@@ -1295,13 +1299,16 @@ def plot_figure(j, inps, metadata):
     prog_bar = ptime.progressBar(maxValue=i_end-i_start, print_msg=inps.print_msg)
     for i in range(i_start, i_end):
         idx = i - i_start
+        prog_bar.update(idx+1, suffix=inps.dset[i].split('/')[-1])
+
+        # plot subplot
         im = plot_subplot4figure(
             i, inps,
             ax=axs[idx],
             data=data[idx, :, :],
             metadata=metadata)
 
-        # colorbar for each subplot
+        # add colorbar for each subplot
         if inps.disp_cbar and not inps.vlim:
             cbar = fig.colorbar(im, ax=axs[idx], pad=0.03, shrink=0.5, aspect=30, orientation='vertical')
 
@@ -1309,8 +1316,6 @@ def plot_figure(j, inps, metadata):
             data_unit = readfile.read_attribute(inps.file, datasetName=inps.dset[i]).get('UNIT', None)
             if data_unit:
                 cbar.set_label(data_unit)
-
-        prog_bar.update(idx+1, suffix=inps.dset[i].split('/')[-1])
     prog_bar.close()
     del data
 

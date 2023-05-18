@@ -75,7 +75,8 @@ def create_parser(subparsers=None):
     # temporal model fitting
     parser.add_argument('--nomodel', '--nofit', dest='plot_model', action='store_false',
                         help='Do not plot the prediction of the time function (deformation model) fitting.')
-    parser.add_argument('--plot-model-conf-int', '--plot-fit-conf-int', dest='plot_model_conf_int', action='store_true',
+    parser.add_argument('--plot-model-conf-int', '--plot-fit-conf-int',
+                        dest='plot_model_conf_int', action='store_true',
                         help='Plot the time function prediction confidence intervals.\n'
                              '[!-- Preliminary feature alert! --!]\n'
                              '[!-- This feature is NOT throughly checked. '
@@ -154,11 +155,6 @@ def cmd_line_parse(iargs=None):
             msg += 'Ignore it and continue'
             print(msg)
 
-    # check: --noverbose option
-    # print tsview.py command line if --noverbose
-    if not inps.print_msg:
-        print('tsview.py', ' '.join(inps.argv))
-
     # default: -u / -c / --fig-size options
     inps.disp_unit = inps.disp_unit if inps.disp_unit else 'cm'
     inps.colormap = inps.colormap if inps.colormap else 'jet'
@@ -176,8 +172,8 @@ def main(iargs=None):
     from mintpy.tsview import timeseriesViewer
 
     # run
-    obj = timeseriesViewer(iargs=iargs)
-    obj.configure(inps)
+    obj = timeseriesViewer(inps)
+    obj.open()
     obj.plot()
     #obj.fig_img.canvas.mpl_disconnect(obj.cid)
 

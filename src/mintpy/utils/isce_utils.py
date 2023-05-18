@@ -1,17 +1,18 @@
+"""Utilities wrapped around ISCE."""
 ############################################################
 # Program is part of MintPy                                #
 # Copyright (c) 2013, Zhang Yunjun, Heresh Fattahi         #
 # Author: Zhang Yunjun, Heresh Fattahi, Apr 2020           #
 ############################################################
-# 2020-07: Talib Oliver-Cabrera, add UAVSAR support w/in stripmapStack
+# 2020-07: Talib Oliver-Cabrera, add UAVSAR support
 # 2020-10: Cunren Liang, add alosStack support
 # 2022-06: Yujie Zheng, add standard processing from isce2
 # Group contents:
-#     metadata
-#     geometry
-#     baseline
-#     multilook
-#     miscellaneous
+#   metadata
+#   geometry
+#   baseline
+#   multilook
+#   miscellaneous
 # Recommend import:
 #   from mintpy.utils import isce_utils
 
@@ -48,21 +49,21 @@ def get_processor(meta_file):
     """
     meta_dir = os.path.dirname(meta_file)
     tops_meta_file = os.path.join(meta_dir, 'IW*.xml')
+    alos_meta_file = os.path.join(meta_dir, '*.track.xml')
     stripmap_meta_files = [os.path.join(meta_dir, i) for i in ['data.db', 'data.dat', 'data']]
-    alosStack_meta_frame_files = glob.glob(os.path.join(meta_dir, 'f1_*', '*.frame.xml'))
 
     processor = None
     if len(glob.glob(tops_meta_file)) > 0:
         # topsStack
         processor = 'tops'
 
+    elif len(glob.glob(alos_meta_file)) > 0:
+        # alosStack / alos2App
+        processor = 'alosStack'
+
     elif any(os.path.isfile(i) for i in stripmap_meta_files):
         # stripmapStack
         processor = 'stripmap'
-
-    elif alosStack_meta_frame_files != []:
-        # alosStack
-        processor = 'alosStack'
 
     elif meta_file.endswith('.xml'):
         # stripmapApp
@@ -290,6 +291,12 @@ def extract_alosStack_metadata(meta_file, geom_dir):
     import isce
     import isceobj
     from isceobj.Planet.Planet import Planet
+
+    # default geom_dir
+    if not geom_dir:
+        geom_dir_cand = os.path.join(os.path.dirname(meta_file), 'insar')
+        if os.path.isdir(geom_dir_cand):
+            geom_dir = geom_dir_cand
 
     track = load_track(os.path.dirname(meta_file), dateStr=os.path.basename(meta_file).strip('.track.xml'))
     rlooks, alooks, width, length = extract_image_size_alosStack(geom_dir)
@@ -764,6 +771,8 @@ def get_full_resolution(meta_file):
     # calculate the full azimuth/range ground resolution
     az_pixel_size = float(meta['AZIMUTH_PIXEL_SIZE'])  #azimuth pixel size on the orbit
     rg_pixel_size = float(meta['RANGE_PIXEL_SIZE'])    #range   pixel size in LOS direction
+    az_pixel_size /= int(meta.get('ALOOKS', 1))
+    rg_pixel_size /= int(meta.get('RLOOKS', 1))
 
     height = float(meta['HEIGHT'])
     inc_angle = ut.incidence_angle(meta, dimension=0)
@@ -1089,6 +1098,61 @@ def unwrap_snaphu(int_file, cor_file, unw_file, defo_max=2.0, max_comp=32,
         atr['INTERLEAVE'] = 'BIP'
         atr['BANDS'] = '1'
         writefile.write_isce_xml(atr, f'{unw_file}.conncomp')
+
+    # time usage
+    m, s = divmod(time.time() - start_time, 60)
+    print(f'time used: {m:02.0f} mins {s:02.1f} secs.')
+
+    return unw_file
+
+
+def unwrap_icu(int_file, unw_file):
+    """Unwrap interferograms using ICU via isce2.
+
+    Modified from ISCE-2/topsStack/unwrap.py.
+    Parameters: int_file - str, path of   wrapped interferogram
+                unw_file - str, path of unwrapped interferogram
+    Returns:    unw_file - str, path of unwrapped interferogram
+    """
+    import isce
+    import isceobj
+    from mroipac.icu.Icu import Icu
+
+    start_time = time.time()
+
+    # get width
+    img = isceobj.Image.createImage()
+    img.load(int_file + '.xml')
+    width = img.getWidth()
+
+    # create image object for .int file
+    int_img = isceobj.Image.createIntImage()
+    int_img.initImage(int_file, 'read', width)
+    int_img.createImage()
+
+    # create image object for .unw file
+    unw_img = isceobj.Image.createImage()
+    unw_img.setFilename(unw_file)
+    unw_img.setWidth(width)
+    unw_img.imageType = 'unw'
+    unw_img.bands = 2
+    unw_img.scheme = 'BIL'
+    unw_img.dataType = 'FLOAT'
+    unw_img.setAccessMode('write')
+    unw_img.createImage()
+
+    # run ICU
+    icu_obj = Icu()
+    icu_obj.filteringFlag = False
+    icu_obj.useAmplitudeFalg = False
+    icu_obj.singlePatch = True
+    icu_obj.initCorrThresdhold = 0.1
+    icu_obj.icu(intImage=int_img, unwImage=unw_img)
+
+    int_img.finalizeImage()
+    unw_img.finalizeImage()
+    unw_img.renderHdr()
+    unw_img.renderVRT()
 
     # time usage
     m, s = divmod(time.time() - start_time, 60)
